@@ -1,0 +1,6 @@
+{
+    "require": {
+        "sc0vu/web3.php": "dev-master",
+        "scssphp/scssphp": "^1.8.1"
+    }
+}
