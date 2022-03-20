@@ -13,8 +13,8 @@ class MetadataService {
 	public function __construct() {
 		$this->_startTransaction();
 
-		if( empty( $_GET['tokenId'] ) ) {
-			$this->_404();
+		if( ! isset( $_GET[ 'tokenId' ] ) ) {
+			$this->_404( 'No token ID specified' );
 		}
 
 		$_tokenId_ = ( int ) $_GET[ 'tokenId' ];
@@ -22,24 +22,24 @@ class MetadataService {
 		$_data_ = $this->_getTokenById( $_tokenId_ );
 
 		if ( ! empty( $_data_ ) ) {
-			$this->emitToken( $_data_ );
+			$this->_emitToken( $_data_ );
 		}
 
 		if ( ! $this->_tokenExists( $_tokenId_ ) ) {
-			$this->_404();
+			$this->_404( 'The requested token does not exist' );
 		}
 
-		if ( ! $this->_assignMetadata( $_tokenId_ ) ) {
-			$this->_404();
+		if ( ! $this->_assignRandomMetadata( $_tokenId_ ) ) {
+			$this->_404( 'Failed to assign metadata' );
 		}
 
 		$_data_ = $this->_getTokenById( $_tokenId_ );
 
 		if ( ! empty( $_data_ ) ) {
-			$this->emitToken( $_data_ );
+			$this->_emitToken( $_data_ );
 		}
 		else {
-			$this->_404();
+			$this->_404( 'An unknown error occurred' );
 		}
 	}
 
@@ -71,7 +71,7 @@ class MetadataService {
 		return $this->_pdo()->commit();
 	}
 
-	private function _getTokenByID( $tokenId_ ) {
+	private function _getTokenById( $tokenId_ ) {
 		$_query_ = "SELECT
 				 	t.tokenId
 				,	m.Image
@@ -118,7 +118,7 @@ class MetadataService {
 	}
 
 	private function _tokenExists( $tokenId_ ) {
-		$ABI = array (
+		$_ABI_ = array (
 			0 => array (
 				'inputs' => array (
 					0 => array (
@@ -146,10 +146,11 @@ class MetadataService {
 		$_contract_       = new Web3\Contract( $_provider_, $_ABI_ );
 		$_contract_->at( CONTRACT_ADDRESS )->call( 'ownerOf', $tokenId_, function( $err, $res ) use( &$_tokenOwner_ ) {
 			if ( $err ) {
-				return error_log( var_export( $err, true ) );
+				return $this->_404( 'Unable to determine token existence' );
+				// return error_log( var_export( $err, true ) );
 			}
 			if ( isset( $res ) ) {
-				$_tokenOwner_ = $res[0];
+				$_tokenOwner_ = $res;
 			}
 		});
 
@@ -158,10 +159,10 @@ class MetadataService {
 
 	private function _formatToken( $data_ ) {
 		$_token_ = array(
-			"name"         => $data_[ 'Adjective' ] + $data_[ 'Personnage' ],
+			"name"         => $data_[ 'Adjective' ] . $data_[ 'Personnage' ],
 			"description"  => "VeeFiends was created in honor of Gary Vaynerchuk. The creator of VeeFriends. VeeFiends are 268 hand-drawn, parody artworks stored on the Ethereum blockchain. Holders will gain access to exclusive giveaways, mini-games, global leaderboards and be a part of a fun, lighthearted community. And the biggest benefit of all, VeeFiends holders will participate in a lottery to win up to 15 grand prizes - Return flight, hotel accommodation and entry to VeeCon 2022 and beyond!",
 			"external_url" => "https://veefiends.xyz",
-			"image"        => "https://gateway.pinata.cloud/ipfs/" + $data_[ 'Image' ],
+			"image"        => "https://gateway.pinata.cloud/ipfs/" . $data_[ 'Image' ],
 			"attributes"   => array(
 				array(
 					"trait_type" => "Background",
@@ -183,15 +184,18 @@ class MetadataService {
 	private function _emitToken( $data_ ) {
 		$_token_ = $this->_formatToken( $data_ );
 		$this->_commitTransaction();
-		header( 'Content-Type: application/json' );
-		echo json_encode( $_token_, JSON_UNESCAPED_SLASHES );
+		returnJsonHttpResponse( true, $_token_, JSON_UNESCAPED_SLASHES );
 		exit;
 	}
 
-	private function _404() {
+	private function _404( $message_ = '' ) {
 		$this->_rollbackTransaction();
-		header( 'Content-Type: application/json', true, 404 );
-		echo '{"code":404,"error":"Not Found"}';
+		$_err_ = array(
+			'code'    => 404,
+			'error'   => 'Not Found',
+			'message' => $message_
+		);
+		returnJsonHttpResponse( false, $_err_, '' );
 		exit;		
 	}
 }
@@ -206,6 +210,6 @@ catch ( Exception $error ) {
 		,	'requestGetData'  => $_GET
 		,	'error'           => $error
 	);
-	returnJsonHttpResponse( false, $response );
+	returnJsonHttpResponse( false, $response, '' );
 }
 
